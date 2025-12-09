@@ -1,6 +1,4 @@
 import os
-import threading
-from flask import Flask
 from dotenv import load_dotenv
 from telegram.ext import Updater, CommandHandler
 import pandas as pd
@@ -14,9 +12,8 @@ import yfinance as yf
 # LOAD ENV + MODEL
 # ---------------------------------------------------
 load_dotenv("config.env")
-#TOKEN = os.getenv("TELEGRAM_TOKEN")
+TOKEN = os.getenv("TELEGRAM_TOKEN")
 
-Token = "8073446746:AAGIEUzcLDA0rpVHBsa5xEOkblBjPxcagvI"
 rf_model = joblib.load("nifty_rf.joblib")
 
 
@@ -152,20 +149,6 @@ def nifty(update, context):
 
 
 # ---------------------------------------------------
-# FLASK HEALTH SERVER (For Render + UptimeRobot)
-# ---------------------------------------------------
-app = Flask(__name__)
-
-@app.route("/")
-def home():
-    return "Bot is alive!"
-
-
-def run_flask():
-    app.run(host="0.0.0.0", port=10000)
-
-
-# ---------------------------------------------------
 # MAIN ENTRY
 # ---------------------------------------------------
 def main():
@@ -181,5 +164,4 @@ def main():
 
 
 if __name__ == "__main__":
-    threading.Thread(target=run_flask).start()
     main()
