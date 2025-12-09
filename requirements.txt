@@ -7,4 +7,4 @@ requests
 ta
 joblib
 Flask==2.2.5
-scikit-learn==1.7.2
+scikit-learn==1.3.2
