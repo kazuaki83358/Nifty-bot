@@ -10,8 +10,15 @@ import joblib
 import requests
 import yfinance as yf
 
-TOKEN = os.getenv("TELEGRAM_TOKEN")
-print("Loaded Token:", TOKEN)
+# ---------------------------------------------------
+# LOAD ENV + MODEL
+# ---------------------------------------------------
+load_dotenv("config.env")
+#TOKEN = os.getenv("TELEGRAM_TOKEN")
+
+Token = "8073446746:AAGIEUzcLDA0rpVHBsa5xEOkblBjPxcagvI"
+rf_model = joblib.load("nifty_rf.joblib")
+
 
 # ---------------------------------------------------
 # START COMMAND
