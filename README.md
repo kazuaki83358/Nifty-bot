@@ -21,7 +21,7 @@ A Telegram bot that provides real-time NIFTY 50 market analysis with ML-powered 
 
 1. Clone the repository:
 ```bash
-git clone <your-repo-url>
+git clone <git@github.com:kazuaki83358/Nifty-bot.git>
 cd nifty-bot
 ```
 
