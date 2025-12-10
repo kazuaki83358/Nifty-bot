@@ -1,38 +1,37 @@
 import os
 from dotenv import load_dotenv
-from telegram.ext import Updater, CommandHandler
+from flask import Flask, request
+from telegram import Update
+from telegram.ext import Dispatcher, CommandHandler
 import pandas as pd
 import numpy as np
 import ta
 import joblib
 import requests
 import yfinance as yf
+import logging
 
-# ---------------------------------------------------
-# LOAD ENV & MODEL
-# ---------------------------------------------------
+# Load environment
 load_dotenv("config.env")
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 NEWS_KEY = os.getenv("NEWSDATA_KEY")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL", "http://localhost:5000")
 
+# Load model
 rf_model = joblib.load("nifty_rf.joblib")
 
+# Flask app
+app = Flask(__name__)
+
+# Logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------
-# START COMMAND
-# ---------------------------------------------------
-def start(update, context):
-    update.message.reply_text(
-        "Bot is working! 🚀\nUse /nifty to get the latest NIFTY analysis."
-    )
-
-
-# ---------------------------------------------------
-# MARKET NEWS FETCHING
+# MARKET NEWS
 # ---------------------------------------------------
 def get_market_news():
     try:
-        # Search for more specific NIFTY-related news
         url = f"https://newsdata.io/api/1/news?apikey={NEWS_KEY}&q=nifty%2050%20OR%20sensex%20OR%20rbi%20OR%20interest%20rate&language=en&country=in"
         response = requests.get(url, timeout=6).json()
 
@@ -40,7 +39,6 @@ def get_market_news():
         if not articles:
             return [], "No market news available."
 
-        # Remove duplicates and get top 2 unique headlines
         seen = set()
         unique_headlines = []
         for a in articles:
@@ -58,12 +56,12 @@ def get_market_news():
         return unique_headlines, text
 
     except Exception as e:
-        print(f"[NEWS ERROR] {e}")
+        logger.error(f"[NEWS ERROR] {e}")
         return [], "News unavailable."
 
 
 # ---------------------------------------------------
-# SENTIMENT ANALYSIS
+# SENTIMENT
 # ---------------------------------------------------
 def analyze_sentiment(headlines):
     if not headlines:
@@ -73,7 +71,6 @@ def analyze_sentiment(headlines):
     negative = ["fall", "down", "drop", "loss", "war", "fear", "inflation", "selloff"]
 
     score = 0
-
     for h in headlines:
         text = h.lower()
         if any(w in text for w in positive):
@@ -90,7 +87,7 @@ def analyze_sentiment(headlines):
 
 
 # ---------------------------------------------------
-# BACKTEST MODE (Market Closed)
+# BACKTEST MODE
 # ---------------------------------------------------
 def get_backtest_candle():
     for period in ["90d", "60d", "30d"]:
@@ -120,7 +117,6 @@ def get_backtest_candle():
         except:
             continue
 
-    # fallback
     return pd.Series({
         "Close": 26000,
         "rsi": 50,
@@ -131,7 +127,7 @@ def get_backtest_candle():
 
 
 # ---------------------------------------------------
-# LIVE NIFTY DATA
+# LIVE DATA
 # ---------------------------------------------------
 def get_nifty_analysis():
     url = "https://www.nseindia.com/api/chart-databyindex?index=NIFTY%2050&preopen=true"
@@ -175,8 +171,14 @@ def get_ml_prediction(row):
 
 
 # ---------------------------------------------------
-# /nifty COMMAND
+# TELEGRAM COMMANDS
 # ---------------------------------------------------
+def start(update, context):
+    update.message.reply_text(
+        "Bot is working! 🚀\nUse /nifty to get the latest NIFTY analysis."
+    )
+
+
 def nifty(update, context):
     update.message.reply_text("Fetching NIFTY data… ⏳")
 
@@ -187,19 +189,19 @@ def nifty(update, context):
         row = get_backtest_candle()
         source = "📦 *Last Available Data*"
 
-    # News + sentiment
     headlines, news_text = get_market_news()
     sentiment, sentiment_msg = analyze_sentiment(headlines)
-
-    # Prediction
     direction, confidence = get_ml_prediction(row)
 
-    # Reasoning
     reasons = []
-    if row["rsi"] > 60: reasons.append("RSI overbought")
-    if row["rsi"] < 40: reasons.append("RSI oversold")
-    if row["macd"] > row["signal"]: reasons.append("MACD bullish crossover")
-    else: reasons.append("MACD bearish crossover")
+    if row["rsi"] > 60: 
+        reasons.append("RSI overbought")
+    if row["rsi"] < 40: 
+        reasons.append("RSI oversold")
+    if row["macd"] > row["signal"]: 
+        reasons.append("MACD bullish")
+    else: 
+        reasons.append("MACD bearish")
     reasons.append(f"News: {sentiment}")
 
     reason_text = " | ".join(reasons)
@@ -229,9 +231,55 @@ def nifty(update, context):
 
 
 # ---------------------------------------------------
-# MAIN
+# FLASK ROUTES
 # ---------------------------------------------------
-def main():
+@app.route('/health', methods=['GET'])
+def health():
+    """Health check endpoint for Render"""
+    return {"status": "healthy", "bot": "active"}, 200
+
+
+@app.route(f'/webhook/{TOKEN}', methods=['POST'])
+def webhook():
+    """Telegram webhook endpoint"""
+    try:
+        from telegram import Bot
+        bot = Bot(TOKEN)
+        update = Update.de_json(request.get_json(), bot=bot)
+        
+        if update.message and update.message.text:
+            if update.message.text == '/start':
+                start(update, None)
+            elif update.message.text == '/nifty':
+                nifty(update, None)
+        
+        return "ok", 200
+    except Exception as e:
+        logger.error(f"Webhook error: {e}")
+        return "error", 400
+
+
+@app.route('/', methods=['GET'])
+def index():
+    """Homepage"""
+    return {
+        "status": "Bot is running",
+        "endpoints": {
+            "health": "/health",
+            "webhook": f"/webhook/{TOKEN}",
+            "home": "/"
+        }
+    }, 200
+
+
+# ---------------------------------------------------
+# LOCAL POLLING MODE
+# ---------------------------------------------------
+def run_locally():
+    """Run bot with polling (local development)"""
+    from telegram.ext import Updater
+    
+    logger.info("Starting bot in polling mode (local)...")
     updater = Updater(TOKEN)
     dp = updater.dispatcher
 
@@ -239,9 +287,24 @@ def main():
     dp.add_handler(CommandHandler("nifty", nifty))
 
     updater.start_polling()
-    print("Bot Running...")
+    logger.info("Bot is polling locally...")
     updater.idle()
 
 
+# ---------------------------------------------------
+# MAIN
+# ---------------------------------------------------
 if __name__ == "__main__":
-    main()
+    import sys
+    
+    # Check if running on Render or locally
+    is_render = os.getenv("RENDER", "false").lower() == "true"
+    
+    if is_render:
+        # Production: Run Flask with webhooks
+        logger.info("Starting bot in webhook mode (Render)...")
+        port = int(os.getenv("PORT", 10000))
+        app.run(host="0.0.0.0", port=port, debug=False)
+    else:
+        # Local development: Run with polling
+        run_locally()

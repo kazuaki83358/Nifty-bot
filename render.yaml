@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: nifty-bot
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py
+    envVars:
+      - key: TELEGRAM_TOKEN
+        scope: run
+        sync: false
+      - key: NEWSDATA_KEY
+        scope: run
+        sync: false
+      - key: WEBHOOK_URL
+        scope: run
+        sync: false
+      - key: RENDER
+        value: "true"
