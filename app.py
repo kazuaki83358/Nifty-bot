@@ -2,7 +2,7 @@ import os
 from dotenv import load_dotenv
 from flask import Flask, request
 from telegram import Update
-from telegram.ext import Dispatcher, CommandHandler
+from telegram.ext import Updater, CommandHandler
 import pandas as pd
 import numpy as np
 import ta
@@ -181,7 +181,6 @@ def start(update, context):
 
 def nifty(update, context):
     update.message.reply_text("Fetching NIFTY data… ⏳")
-
     try:
         row = get_nifty_analysis()
         source = "📡 *Live Data*"
@@ -230,6 +229,7 @@ def nifty(update, context):
     update.message.reply_text(msg, parse_mode="Markdown")
 
 
+
 # ---------------------------------------------------
 # FLASK ROUTES
 # ---------------------------------------------------
@@ -243,9 +243,7 @@ def health():
 def webhook():
     """Telegram webhook endpoint"""
     try:
-        from telegram import Bot
-        bot = Bot(TOKEN)
-        update = Update.de_json(request.get_json(), bot=bot)
+        update = Update.de_json(request.get_json(), bot=None)
         
         if update.message and update.message.text:
             if update.message.text == '/start':
@@ -275,10 +273,10 @@ def index():
 # ---------------------------------------------------
 # LOCAL POLLING MODE
 # ---------------------------------------------------
+# LOCAL POLLING MODE
+# ---------------------------------------------------
 def run_locally():
     """Run bot with polling (local development)"""
-    from telegram.ext import Updater
-    
     logger.info("Starting bot in polling mode (local)...")
     updater = Updater(TOKEN)
     dp = updater.dispatcher
@@ -289,7 +287,6 @@ def run_locally():
     updater.start_polling()
     logger.info("Bot is polling locally...")
     updater.idle()
-
 
 # ---------------------------------------------------
 # MAIN
